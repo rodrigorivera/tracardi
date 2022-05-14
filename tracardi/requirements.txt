@@ -1,3 +1,5 @@
+git+https://github.com/Tracardi/worker.git@master
+
 pydantic
 aiohttp
 aiohttp[speedups]
@@ -40,3 +42,4 @@ influxdb-client
 grpcio
 grpcio-tools
 certifi
+celery==5.2.6

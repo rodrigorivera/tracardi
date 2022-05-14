@@ -129,7 +129,6 @@ def get_resource_types():
             "tags": ['mysql', 'database'],
             "name": "MySQL",
             "icon": "mysql"
-
         },
         "mqtt": {
             "config": {
@@ -276,6 +275,16 @@ def get_resource_types():
             "tags": ["active_campaign"],
             "name": "ActiveCampaign",
             "icon": "plugin"
+        },
+        "marketing_cloud": {
+            "config": {
+                "client_id": "<your-client-id>",
+                "client_secret": "<your-client-secret>",
+                "subdomain": "<your-subdomain>"
+            },
+            "tags": ["marketing_cloud"],
+            "name": "Salesforce Marketing Cloud",
+            "icon": "plugin"
         }
     }
 
@@ -285,6 +294,7 @@ def get_destinations():
     for resource_type in resource_types.values():
         if 'destination' in resource_type:
             yield resource_type["destination"]['package'], resource_type
+
 
 def get_type_of_resources():
     resource_types = get_resource_types()
