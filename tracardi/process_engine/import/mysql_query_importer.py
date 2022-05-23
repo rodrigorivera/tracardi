@@ -1,5 +1,4 @@
 import asyncio
-import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import Tuple
@@ -10,25 +9,26 @@ import aiomysql
 from tracardi.domain.import_config import ImportConfig
 from tracardi.domain.task import Task
 from .importer import Importer
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 from tracardi.service.plugin.domain.register import Form, FormGroup, FormField, FormComponent
 from tracardi.domain.named_entity import NamedEntity
 from tracardi.service.storage.driver import storage
 from tracardi.process_engine.action.v1.connectors.mysql.query.model.connection import Connection
 from tracardi.service.plugin.plugin_endpoint import PluginEndpoint
-from worker.celery_worker import run_mysql_import_job
+from worker.celery_worker import run_mysql_query_import_job
 
 
-class MySQLImportConfig(BaseModel):
+class MySQLQueryImportConfig(BaseModel):
     source: NamedEntity
     database_name: NamedEntity
-    table_name: NamedEntity
-    batch: int
+    query: str
+    batch: int = 100
 
-
-class TableFetcherConfig(BaseModel):
-    source: NamedEntity
-    database_name: NamedEntity
+    @validator('query')
+    def validate_query(cls, value):
+        if (not value.lower().startswith("select")) or "limit" in value.lower():
+            raise ValueError("Provided query cannot contain LIMIT keyword ans has to start with SELECT keyword.")
+        return value
 
 
 class DatabaseFetcherConfig(BaseModel):
@@ -56,35 +56,14 @@ class Endpoint(PluginEndpoint):
                     "result": [{"name": list(record.values())[0], "id": list(record.values())[0]} for record in result]
                 }
 
-    @staticmethod
-    async def fetch_tables(config: dict):
-        config = TableFetcherConfig(**config)
-        resource = await storage.driver.resource.load(config.source.id)
-        credentials = resource.credentials.production
-        pool = await Connection(**credentials).connect()
 
-        async with pool.acquire() as conn:
-            async with conn.cursor(aiomysql.DictCursor) as cursor:
-                stripped_database_name = re.sub(r'\W+', '', config.database_name.id)
-                await cursor.execute(f"SHOW TABLES FROM {stripped_database_name}")
-
-                result = await cursor.fetchall()
-                await cursor.close()
-                conn.close()
-
-                return {
-                    "total": len(result),
-                    "result": [{"name": list(record.values())[0], "id": list(record.values())[0]} for record in result]
-                }
-
-
-class MySQLTableImporter(Importer):
-    config_model = MySQLImportConfig
+class MySQLQueryImporter(Importer):
+    config_model = MySQLQueryImportConfig
 
     init = {
         "source": {"name": "", "id": ""},
         "database_name": {"name": "", "id": ""},
-        "table_name": {"name": "", "id": ""},
+        "query": "",
         "batch": 100,
     }
 
@@ -109,15 +88,11 @@ class MySQLTableImporter(Importer):
                 })
             ),
             FormField(
-                name="Table name",
-                id="table_name",
-                description="Select table that you want to fetch data from.",
-                component=FormComponent(type="autocomplete", props={
-                    "label": "Table",
-                    "endpoint": {
-                        "url": Endpoint.url(__name__, "fetch_tables"),
-                        "method": "post"
-                    }
+                name="Query",
+                id="query",
+                description="Type in the query that will filter the data.",
+                component=FormComponent(type="sql", props={
+                    "label": "Query"
                 })
             ),
             FormField(
@@ -132,16 +107,15 @@ class MySQLTableImporter(Importer):
     async def run(self, task_name, import_config: ImportConfig) -> Tuple[str, str]:
 
         def add_to_celery(import_config, credentials):
-            return run_mysql_import_job.delay(
+            return run_mysql_query_import_job.delay(
                 import_config.dict(),
                 credentials
             )
 
-        config = MySQLImportConfig(**import_config.config)
+        config = MySQLQueryImportConfig(**import_config.config)
         resource = await storage.driver.resource.load(config.source.id)
         credentials = resource.credentials.test if self.debug is True else resource.credentials.production
 
-        # Adding to celery is blocking,run in executor
         executor = ThreadPoolExecutor(
             max_workers=1,
         )

@@ -48,6 +48,7 @@ def register() -> Plugin:
             license="MIT",
             author="Risto Kowaczewski",
             init={"value": ""},
+            manual="assign_profile_id_action",
             form=Form(groups=[
                 FormGroup(
                     name="Value to hash",
@@ -74,7 +75,7 @@ def register() -> Plugin:
                     "payload": PortDoc(desc="This port takes payload object.")
                 },
                 outputs={
-                    "payload": PortDoc(desc="This port input payload.")
+                    "payload": PortDoc(desc="Returns input payload.")
                 }
             )
         )
