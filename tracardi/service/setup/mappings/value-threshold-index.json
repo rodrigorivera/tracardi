@@ -1,9 +1,13 @@
 {
   "settings": {
-    "number_of_shards": 5,
-    "number_of_replicas": 1
+    "number_of_shards": %%SHARDS%%,
+    "number_of_replicas": %%REPLICAS%%
   },
   "mappings": {
+    "_meta": {
+      "version": "%%VERSION%%",
+      "name": "%%PREFIX%%"
+    },
     "dynamic": false,
     "properties": {
       "id": {
@@ -16,14 +20,19 @@
         "type":   "date"
       },
       "ttl": {
-        "type": "integer"
+        "type": "integer",
+        "index": false
       },
       "name": {
         "type": "keyword"
       },
       "last_value": {
-        "type": "keyword"
+        "type": "keyword",
+        "index": false
       }
     }
+  },
+  "aliases": {
+    "%%ALIAS%%": {}
   }
 }

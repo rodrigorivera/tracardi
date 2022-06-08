@@ -1,8 +1,12 @@
+import hashlib
 import logging
 import os
 
-ON_PREMISES = 'on-premises'
-AWS_CLOUD = 'aws-cloud'
+from tracardi.domain.version import Version
+
+VERSION = '0.7.1'
+NAME = os.environ['INSTANCE_PREFIX'] if 'INSTANCE_PREFIX' in os.environ and os.environ[
+    'INSTANCE_PREFIX'] else hashlib.md5(VERSION.encode('utf-8')).hexdigest()[:5]
 
 
 def _get_logging_level(level: str) -> int:
@@ -22,14 +26,17 @@ def _get_logging_level(level: str) -> int:
 class TracardiConfig:
     def __init__(self, env):
         self.track_debug = (env['TRACK_DEBUG'].lower() == 'yes') if 'TRACK_DEBUG' in env else False
+        self.save_logs = (env['SAVE_LOGS'].lower() == 'yes') if 'SAVE_LOGS' in env else True
         self.cache_profiles = (env['CACHE_PROFILE'].lower() == 'yes') if 'CACHE_PROFILE' in env else False
-        self.sync_profile_tracks = (env['SYNC_PROFILE_TRACKS'].lower() == 'yes') if 'SYNC_PROFILE_TRACKS' in env else False
-        self.postpone_destination_sync = int(env['POSTPONE_DESTINATION_SYNC']) if 'POSTPONE_DESTINATION_SYNC' in env else 0
+        self.sync_profile_tracks = (
+                    env['SYNC_PROFILE_TRACKS'].lower() == 'yes') if 'SYNC_PROFILE_TRACKS' in env else False
+        self.postpone_destination_sync = int(
+            env['POSTPONE_DESTINATION_SYNC']) if 'POSTPONE_DESTINATION_SYNC' in env else 0
         self.storage_driver = env['STORAGE_DRIVER'] if 'STORAGE_DRIVER' in env else 'elastic'
         self.query_language = env['QUERY_LANGUAGE'] if 'QUERY_LANGUAGE' in env else 'kql'
         self.tracardi_pro_host = env['TRACARDI_PRO_HOST'] if 'TRACARDI_PRO_HOST' in env else 'pro.tracardi.com'
         self.logging_level = _get_logging_level(env['LOGGING_LEVEL']) if 'LOGGING_LEVEL' in env else logging.WARNING
-        self.version = '0.7.0'
+        self.version = Version(version=VERSION, name=NAME)
 
 
 class MemoryCacheConfig:
@@ -52,11 +59,10 @@ class ElasticConfig:
         if 'ELASTIC_HOST' in env and isinstance(env['ELASTIC_HOST'], str) and env['ELASTIC_HOST'].isnumeric():
             raise ValueError("Env ELASTIC_HOST must be sting")
 
-        self.instance_prefix = os.environ['INSTANCE_PREFIX'] if 'INSTANCE_PREFIX' in os.environ and os.environ['INSTANCE_PREFIX'] else ''
-
-        self.hosting = env['ELASTIC_HOSTING'] if 'ELASTIC_HOSTING' in env else ON_PREMISES  # Possible values ON_PREMISES|AWS_CLOUD
         self.host = env['ELASTIC_HOST'] if 'ELASTIC_HOST' in env else '127.0.0.1'
         self.host = self.host.split(",")
+        self.replicas = env['ELASTIC_INDEX_REPLICAS'] if 'ELASTIC_INDEX_REPLICAS' in env else "1"
+        self.shards = env['ELASTIC_INDEX_SHARDS'] if 'ELASTIC_INDEX_SHARDS' in env else "5"
         self.sniff_on_start = env['ELASTIC_SNIFF_ON_START'] if 'ELASTIC_SNIFF_ON_START' in env else None
         self.sniff_on_connection_fail = env[
             'ELASTIC_SNIFF_ON_CONNECTION_FAIL'] if 'ELASTIC_SNIFF_ON_CONNECTION_FAIL' in env else None
@@ -76,12 +82,6 @@ class ElasticConfig:
             if 'ELASTIC_REFRESH_PROFILES_AFTER_SAVE' in env else False
         self.logging_level = _get_logging_level(env['ELASTIC_LOGGING_LEVEL']) if 'ELASTIC_LOGGING_LEVEL' in env \
             else logging.WARNING
-
-        # AWS env variables
-
-        # self.aws_access_key_id = env['AWS_ACCESS_KEY_ID'] if 'AWS_ACCESS_KEY_ID' in env else None
-        # self.aws_secret_access_key = env['AWS_SECRET_ACCESS_KEY'] if 'AWS_SECRET_ACCESS_KEY' in env else None
-        # self.aws_region = env['AWS_REGION'] if 'AWS_REGION' in env else None
 
 
 class RedisConfig:

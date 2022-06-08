@@ -1,13 +1,17 @@
 {
   "index_patterns": [
-    "%%PREFIX%%-tracardi-user-log-*-*"
+    "%%VERSION%%.%%PREFIX%%.tracardi-user-log-*-*"
   ],
   "template": {
     "settings": {
-      "number_of_shards": 5,
-      "number_of_replicas": 1
+    "number_of_shards": %%SHARDS%%,
+    "number_of_replicas": %%REPLICAS%%
     },
     "mappings": {
+      "_meta": {
+        "version": "%%VERSION%%",
+        "name": "%%PREFIX%%"
+      },
       "dynamic": false,
       "properties": {
         "timestamp": {
@@ -20,6 +24,9 @@
           "type": "keyword"
         }
       }
+    },
+    "aliases": {
+      "%%PREFIX%%.tracardi-user-log": {}
     }
   }
 }

@@ -1,9 +1,13 @@
 {
   "settings": {
-    "number_of_shards": 5,
-    "number_of_replicas": 1
+    "number_of_shards": %%SHARDS%%,
+    "number_of_replicas": %%REPLICAS%%
   },
   "mappings": {
+    "_meta": {
+      "version": "%%VERSION%%",
+      "name": "%%PREFIX%%"
+    },
     "dynamic": false,
     "properties": {
       "event_id": {
@@ -38,9 +42,12 @@
         "type": "text"
       },
       "traceback": {
-        "type": "text",
+        "type": "keyword",
         "index": false
       }
     }
+  },
+  "aliases": {
+    "%%ALIAS%%": {}
   }
 }

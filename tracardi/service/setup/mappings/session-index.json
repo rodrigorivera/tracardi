@@ -1,13 +1,18 @@
 {
   "index_patterns": [
-    "%%PREFIX%%-tracardi-session-*-*"
+    "%%VERSION%%.%%PREFIX%%.tracardi-session-*-*"
   ],
   "template": {
     "settings": {
-      "number_of_shards": 5,
-      "number_of_replicas": 1
+    "number_of_shards": %%SHARDS%%,
+    "number_of_replicas": %%REPLICAS%%,
+      "index.refresh_interval": "3s"
     },
     "mappings": {
+      "_meta": {
+        "version": "%%VERSION%%",
+        "name": "%%PREFIX%%"
+      },
       "dynamic": false,
       "properties": {
         "id": {
@@ -49,6 +54,9 @@
           "type": "object"
         }
       }
+    },
+    "aliases": {
+      "%%PREFIX%%.tracardi-session": {}
     }
   }
 }

@@ -1,14 +1,19 @@
 {
   "index_patterns": [
-    "%%PREFIX%%-tracardi-event-*-*"
+    "%%VERSION%%.%%PREFIX%%.tracardi-event-*-*"
   ],
   "template": {
     "settings": {
-      "number_of_shards": 5,
-      "number_of_replicas": 1,
-      "index.mapping.total_fields.limit": 1000
+    "number_of_shards": %%SHARDS%%,
+    "number_of_replicas": %%REPLICAS%%,
+      "index.mapping.total_fields.limit": 2000,
+      "index.refresh_interval": "10s"
     },
     "mappings": {
+      "_meta": {
+        "version": "%%VERSION%%",
+        "name": "%%PREFIX%%"
+      },
       "dynamic": false,
       "properties": {
         "id": {
@@ -98,9 +103,15 @@
         },
         "config": {
           "dynamic": true,
-          "type": "object"
+          "type": "object",
+          "enabled": false
         },
         "context": {
+          "dynamic": true,
+          "type": "object",
+          "enabled": false
+        },
+        "indexed": {
           "dynamic": true,
           "type": "object"
         },
@@ -115,6 +126,9 @@
           }
         }
       }
+    },
+    "aliases": {
+      "%%PREFIX%%.tracardi-event": {}
     }
   }
 }

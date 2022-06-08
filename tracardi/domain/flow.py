@@ -16,19 +16,19 @@ logger.setLevel(tracardi.logging_level)
 
 
 class FlowSchema(BaseModel):
-    version: str = tracardi.version
+    version: str = tracardi.version.version
     uri: str = 'http://www.tracardi.com/2021/WFSchema'
     server_version: str = None
 
     def __init__(self, **data: Any):
         super().__init__(**data)
-        self.server_version = tracardi.version
+        self.server_version = tracardi.version.version
 
 
 class Flow(GraphFlow):
     projects: Optional[List[str]] = ["General"]
     lock: bool = False
-    wf_schema: FlowSchema
+    wf_schema: FlowSchema = FlowSchema()
 
     def get_production_workflow_record(self) -> 'FlowRecord':
 
@@ -61,7 +61,7 @@ class Flow(GraphFlow):
         return Flow(
             id=str(uuid.uuid4()) if id is None else id,
             name="Empty",
-            wf_schema=FlowSchema(version=tracardi.version),
+            wf_schema=FlowSchema(version=str(tracardi.version)),
             enabled=False,
             flowGraph=FlowGraphData(nodes=[], edges=[])
         )
@@ -74,7 +74,7 @@ class Flow(GraphFlow):
         return Flow(
             id=str(uuid.uuid4()) if id is None else id,
             name=name,
-            wf_schema=FlowSchema(version=tracardi.version),
+            wf_schema=FlowSchema(version=str(tracardi.version)),
             description=description,
             enabled=enabled,
             projects=projects,

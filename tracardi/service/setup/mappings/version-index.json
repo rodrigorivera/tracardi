@@ -10,18 +10,12 @@
     },
     "dynamic": false,
     "properties": {
-      "id": {
+      "version": {
         "type": "keyword"
       },
-      "host": {
-        "type": "keyword"
-      },
-      "token": {
+      "name": {
         "type": "keyword"
       }
     }
-  },
-  "aliases": {
-    "%%ALIAS%%": {}
   }
 }

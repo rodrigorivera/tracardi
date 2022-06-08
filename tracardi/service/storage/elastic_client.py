@@ -3,7 +3,7 @@ from uuid import uuid4
 from elasticsearch import helpers, AsyncElasticsearch
 from elasticsearch.exceptions import NotFoundError
 from ssl import create_default_context
-from tracardi.config import ON_PREMISES, AWS_CLOUD, tracardi
+from tracardi.config import tracardi
 from tracardi import config
 from tracardi.domain.value_object.bulk_insert_result import BulkInsertResult
 from tracardi.exceptions.log_handler import log_handler
@@ -39,6 +39,17 @@ class ElasticClient:
             return await self._client.delete_by_query(index=index, body=body)
         except NotFoundError:
             return None
+
+    async def reindex(self, source, destination, wait_for_completion=True):
+        return await self._client.reindex(body={
+            "source": {
+                "index": source
+            },
+            "dest": {
+                "index": destination
+            },
+
+        }, wait_for_completion=wait_for_completion)
 
     async def get_mapping(self, index):
         return await self._client.indices.get_mapping(index=index)
@@ -117,16 +128,42 @@ class ElasticClient:
         logger.debug(f"CREATE INDEX: {index}")
         return await self._client.indices.create(index=index, ignore=400, body=mappings)
 
-    async def put_index_template(self, template_name, mappings):
+    async def update_aliases(self, body):
+        return await self._client.indices.update_aliases(body=body)
+
+    async def delete_alias(self, index, alias):
+        logger.debug(f"CREATE ALIAS: {alias} = {index}")
+        return await self._client.indices.delete_alias(name=alias, index=index)
+
+    async def put_index_template(self, template_name, mappings, params=None):
         logger.debug(f"PUT INDEX TEMPLATE: {template_name}")
-        return await self._client.indices.put_index_template(name=template_name, ignore=400, body=mappings)
+        return await self._client.indices.put_index_template(name=template_name,
+                                                             ignore=400,
+                                                             body=mappings,
+                                                             params=params)
+
+    async def delete_index_template(self, template_name, params=None):
+        logger.debug(f"DELETE INDEX TEMPLATE: {template_name}")
+        return await self._client.indices.delete_index_template(
+            name=template_name,
+            params=params)
 
     async def exists_index(self, index):
         logger.debug(f"EXISTS INDEX: {index}")
         return await self._client.indices.exists(index=index)
 
+    async def exists_alias(self, alias, index=None):
+        logger.debug(f"EXISTS ALIAS: {alias}")
+        return await self._client.indices.exists_alias(name=alias, index=index)
+
     async def list_indices(self):
         return await self._client.indices.get("*")
+
+    async def list_aliases(self):
+        return await self._client.indices.get_alias(name="*")
+
+    async def clone(self, source_index, destination_index):
+        return await self._client.indices.clone(index=source_index, target=destination_index)
 
     async def refresh(self, index, params=None, headers=None):
         logger.debug(f"REFRESH INDEX: {index}")
@@ -190,10 +227,7 @@ class ElasticClient:
 
         def get_elastic_client():
             kwargs = ElasticClient._get_elastic_config()
-            if config.elastic.hosting == ON_PREMISES:
-                return ElasticClient(**kwargs)
-            elif config.elastic.hosting == AWS_CLOUD:
-                raise ConnectionError("Not implemented")
+            return ElasticClient(**kwargs)
 
         if _singleton is None:
             _singleton = get_elastic_client()

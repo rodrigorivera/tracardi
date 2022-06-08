@@ -5,8 +5,11 @@ from time import time
 from typing import List, Union, Tuple
 from pydantic import BaseModel
 
-from tracardi.domain.event import Event
+from tracardi.domain.event import Event, EventSession
 from tracardi.domain.flow import Flow
+from tracardi.domain.payload.tracker_payload import TrackerPayload
+from tracardi.domain.profile import Profile
+from tracardi.domain.session import Session
 from tracardi.process_engine.tql.condition import Condition
 from tracardi.service.plugin.runner import ActionRunner
 from tracardi.service.plugin.domain.console import Console, Log
@@ -27,7 +30,7 @@ from ...notation.dot_accessor import DotAccessor
 from ...value_threshold_manager import ValueThresholdManager
 
 
-class ExecutionGraph(BaseModel):
+class GraphInvoker(BaseModel):
     graph: List[Node]
     start_nodes: list
     debug: bool = False
@@ -153,7 +156,11 @@ class ExecutionGraph(BaseModel):
             if not isinstance(node.object, DagExecError):
                 node.object.session = session
                 if node.object.event:
-                    node.object.event.session = session
+                    node.object.event.session = EventSession(
+                        id=session.id,
+                        start=session.metadata.time.insert,
+                        duration=session.metadata.time.duration
+                    )
 
     async def run_task(self, node: Node, payload, ready_upstream_results: ActionsResults):
 
@@ -243,10 +250,33 @@ class ExecutionGraph(BaseModel):
         # Yield async tasks results
 
         for task, input_port, input_params, input_edge_id, active in tasks:
+
+            # Get previous session and profile. Session or profile can be override so we need to be sure when the
+            # reference has changed
+
+            _current_profile_reference = node.object.profile
+            _prev_profile_reference = node.object.profile
+
+            _current_session_reference = node.object.session
+            _prev_session_reference = node.object.session
+
             try:
+
                 result = await task
                 if node.append_input_payload:
                     result = Result.append_input(result, input_params)
+
+                _current_profile_reference = node.object.profile
+                _current_session_reference = node.object.session
+
+                if not isinstance(_current_profile_reference,
+                                  Profile) or _current_profile_reference is _prev_profile_reference:
+                    _current_profile_reference = None
+
+                if not isinstance(_current_session_reference,
+                                  Session) or _current_session_reference is _prev_session_reference:
+                    _current_session_reference = None
+
             except BaseException as e:
 
                 if isinstance(node.object, ActionRunner):
@@ -263,7 +293,13 @@ class ExecutionGraph(BaseModel):
                     traceback=get_traceback(e)
                 )
 
-            yield result, input_port, input_params, input_edge_id, task_start_time, active
+            yield result, \
+                  input_port, input_params, \
+                  input_edge_id, \
+                  task_start_time, \
+                  active, \
+                  _current_profile_reference, \
+                  _current_session_reference
 
     @staticmethod
     def _add_results(task_results: ActionsResults, node: Node, result: Result) -> ActionsResults:
@@ -276,7 +312,7 @@ class ExecutionGraph(BaseModel):
     async def _get_object(debug: bool, node: Node, params=None) -> ActionRunner:
         module = importlib.import_module(node.module)
         task_class = getattr(module, node.className)
-        action = await ExecutionGraph._build(debug, task_class, params)
+        action = await GraphInvoker._build(debug, task_class, params)
 
         if not isinstance(action, ActionRunner):
             raise TypeError("Class {}.{} is not of type {}".format(module, node.className, type(ActionRunner)))
@@ -297,7 +333,7 @@ class ExecutionGraph(BaseModel):
 
         return task_class(**params)
 
-    async def init(self, flow, flow_history, event, session, profile, ux: list) -> InitResult:
+    async def init(self, flow, flow_history, event, session, profile, tracker_payload: TrackerPayload, ux: list) -> InitResult:
         errors = []
         objects = []
         metrics = {}
@@ -316,6 +352,7 @@ class ExecutionGraph(BaseModel):
                 node.object.id = node.id
                 node.object.metrics = metrics
                 node.object.ux = ux
+                node.object.tracker_payload = tracker_payload
                 node.object.execution_graph = self
 
                 objects.append("{}.{}".format(node.module, node.className))
@@ -351,7 +388,8 @@ class ExecutionGraph(BaseModel):
         """
         return event.metadata.debug is True or self.debug is True
 
-    async def run(self, payload, flow: Flow, event: Event) -> Tuple[DebugInfo, List[Log]]:
+    async def run(self, payload, flow: Flow, event: Event, profile: Profile, session: Session) -> Tuple[
+        DebugInfo, List[Log], Profile, Session]:
 
         actions_results = ActionsResults()
         flow_start_time = time()
@@ -392,8 +430,20 @@ class ExecutionGraph(BaseModel):
                 if node.block_flow is True:
                     continue
 
-                async for result, input_port, input_params, input_edge_id, task_start_time, active in \
+                async for result, input_port, input_params, input_edge_id, \
+                          task_start_time, active, \
+                          _profile_reference_to_update, _session_reference_to_update in \
                         self.run_task(node, payload, ready_upstream_results=actions_results):
+
+                    # If the profile or session changed during node execution change its reference in graph invoker
+
+                    if _profile_reference_to_update:
+                        profile = _profile_reference_to_update
+                        print(node.name, "Profile changed")
+
+                    if _session_reference_to_update:
+                        session = _session_reference_to_update
+                        print(node.name, "Session changed")
 
                     executed_node = active | executed_node
 
@@ -468,7 +518,7 @@ class ExecutionGraph(BaseModel):
 
                 error_log = Log(
                     module=__name__,
-                    class_name='ExecutionGraph',
+                    class_name='GraphInvoker',
                     type='error',
                     message=str(e)
                 )
@@ -529,7 +579,7 @@ class ExecutionGraph(BaseModel):
                     for log in node.object.console.get_logs():  # type: Log
                         log_list.append(log)
 
-        return debug_info, log_list
+        return debug_info, log_list, profile, session
 
     def serialize(self):
         return self.dict()
